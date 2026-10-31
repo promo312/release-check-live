@@ -77,6 +77,7 @@ export interface SessionState {
 }
 
 export type ClientMessage =
+  | { type: 'take-control' }
   | { type: 'meters'; meters: MeterFrame }
   | { type: 'audio'; active: boolean; source: string; details?: AudioDetails }
   | { type: 'command'; command: Command }

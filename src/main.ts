@@ -28,7 +28,7 @@ let toastTimer: ReturnType<typeof setTimeout>;
 let sourceType: AudioSourceKind = 'demo';
 let sourceName = '';
 
-const send = (message: ClientMessage) => { if (ws?.readyState === WebSocket.OPEN && controller) ws.send(JSON.stringify(message)); };
+const send = (message: ClientMessage) => { if (ws?.readyState === WebSocket.OPEN && (controller || message.type === 'take-control')) ws.send(JSON.stringify(message)); };
 const toast = (message: string) => {
   if (isOverlay) return;
   put('toast', message); hide('toast', false); clearTimeout(toastTimer);
@@ -52,10 +52,10 @@ function connect() {
     let message: ServerMessage;
     try { message = JSON.parse(event.data) as ServerMessage; } catch { return; }
     if (message.type === 'role') {
+      if (controller && !message.controller) void engine?.stop();
       controller = message.controller;
       if (!isOverlay) {
         hide('owner-notice', controller);
-        if (!controller) put('owner-notice', 'Another control room owns the audio. Close that tab and reload this page to take control, or use this tab to watch.');
       }
     }
     if (message.type === 'error') toast(message.message);
@@ -80,6 +80,7 @@ function render() {
   const can = connected && controller && !busy;
   const active = state.audioActive && connected;
   const details = state.audioDetails;
+  disabled('take-control', !connected || busy || state.audioActive || details.paused);
   const playing = controller ? engine!.playing : active;
   const loaded = controller ? engine!.loaded : active || details.paused;
   const muted = controller ? engine!.muted : details.muted;
@@ -268,6 +269,7 @@ if (!isOverlay) {
   document.querySelectorAll<HTMLButtonElement>('[data-close]').forEach(button => button.addEventListener('click', () => button.closest('dialog')!.close()));
   document.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('click', event => { if (event.target === dialog) { const r = dialog.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) dialog.close(); } }));
   el('audio-toggle').addEventListener('click', () => { void togglePlayback(); });
+  el('take-control').addEventListener('click', () => send({ type: 'take-control' }));
   el('profile').addEventListener('change', () => { if (engine?.loaded) void startAudio('demo'); });
   el('monitor').addEventListener('click', () => { engine?.toggleMonitor(); syncAudio(); render(); });
   el('preset-original').addEventListener('click', () => changePreset('original'));

@@ -10,7 +10,7 @@ export const controlRoom = () => `
     <header class="topbar"><div class="breadcrumb"><span>NINJA MDE</span><span class="slash">/</span> RELEASE TOOLS</div><div class="topbar-right"><span class="connection" id="connection"><span class="dot"></span> Connecting</span><span class="channel-status" id="channel-status">Demo chat</span><button class="quiet" data-open="setup">Quick setup ${icon('external')}</button></div></header>
     <main>
       <section class="page-heading"><div><h1>Release Check <span>Live</span><span class="title-dot">.</span></h1><p>Measure. Fix. Release.</p></div><a href="/overlay" target="_blank" rel="noopener" class="button secondary" id="overlay-link">${icon('external')} Open OBS overlay</a></section>
-      <div id="owner-notice" class="notice" hidden></div>
+      <div id="owner-notice" class="notice" hidden><span>Another control room owns the audio. Take control when it is idle, or close that tab and reload.</span><button class="button secondary small" id="take-control" disabled>Take control</button></div>
       <section class="source-bar" aria-label="Audio controls">
         <div class="source-art">${icon('wave')}</div>
         <div class="source-info"><div class="source-label"><span id="source-kind">DEMO AUDIO</span><span class="source-tag" id="source-tag">Original</span></div><strong id="source-name">A loop to get you started</strong><span id="source-description">Original synthesis · 112 BPM · stereo</span></div>

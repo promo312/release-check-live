@@ -18,6 +18,7 @@ body.overlay-page{background:transparent;overflow:hidden}.obs-overlay{width:690p
 @media(max-width:740px){.source-actions .open-audio-file{flex:0 0 100%;min-height:38px;margin-bottom:5px}}
 
 /* Recording layout: score and issue are the first row at normal browser zoom. */
+.notice{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .channel-status{font-size:11px;color:var(--accent);border:1px solid #425333;border-radius:5px;padding:5px 8px}
 .master-toggle{display:flex;align-items:center;padding:3px;gap:3px;border:1px solid #455638;border-radius:7px;background:#141c10}
 .master-toggle button{background:transparent;color:#94a783;border-radius:4px;padding:8px 11px;font-size:11px;white-space:nowrap}

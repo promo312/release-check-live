@@ -34,12 +34,25 @@ sockets.on('connection', (ws, role: string) => {
   send(ws, { type: 'role', controller: ownsAudio }); snapshot(ws);
   let bucket = 0, bucketAt = Date.now();
   ws.on('message', raw => {
-    if (ws !== controller) return;
+    if (role !== 'controller') return;
     if (Date.now() - bucketAt > 1000) { bucket = 0; bucketAt = Date.now(); }
     if (++bucket > 40) return;
     let message: Record<string, unknown>;
     try { message = JSON.parse(raw.toString()); } catch { return; }
     if (!message || typeof message !== 'object') return;
+    if (message.type === 'take-control') {
+      if (ws === controller) return;
+      if (session.state.audioActive || session.state.audioDetails.paused) {
+        send(ws, { type: 'error', message: 'The other control room is playing or paused with a track loaded. Close that tab before taking control.' });
+        return;
+      }
+      if (controller) send(controller, { type: 'role', controller: false });
+      controller = ws;
+      send(ws, { type: 'role', controller: true });
+      sockets.clients.forEach(snapshot);
+      return;
+    }
+    if (ws !== controller) return;
     if (message.type === 'meters' && validMeter(message.meters)) session.meters(message.meters);
     else if (message.type === 'audio' && typeof message.active === 'boolean' && typeof message.source === 'string') {
       const details = message.details as AudioDetails | undefined;
@@ -61,7 +74,10 @@ sockets.on('connection', (ws, role: string) => {
     } else if (message.type === 'reset') session.reset();
     if (message.type !== 'meters') sockets.clients.forEach(snapshot);
   });
-  ws.on('close', () => { if (controller === ws) { controller = null; session.setAudio(false, ''); } });
+  ws.on('close', () => { if (controller === ws) {
+    controller = null;
+    session.setAudio(false, '', { kind: 'demo', preset: 'original', paused: false, muted: true });
+  } });
 });
 
 server.on('request', (request, response) => {
