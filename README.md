@@ -6,6 +6,16 @@ By Ninja MDE (Vadim Timchenko).
 
 A local control room and transparent OBS overlay for music producers. Measure the audio, run a 30-second check, then let the audience vote on the next step. The default demo works without a Twitch account, credentials, recordings, or paid services.
 
+## Browser verification
+
+At 1920 × 1080 and 100% zoom, the same locally loaded reference WAV measured **100/100 in Original** and **50/100 in Hot master**. The second check reported clipping and displayed its fix. These images show demo chat; a real Twitch-channel recording is pending account setup.
+
+[Original: 100/100](docs/screenshots/original-1920.png)
+
+![Hot master: 50/100, clipping finding, useful fix and chat votes](docs/screenshots/hot-master-1920.png)
+
+![Transparent OBS overlay with the same score, top issue, fix and vote bar](docs/screenshots/obs-overlay-1920.png)
+
 ## Start in demo mode
 
 Requires Node.js **20.19+** and npm. From this folder, run:
