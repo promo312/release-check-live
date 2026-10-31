@@ -1,0 +1,32 @@
+{
+  "name": "release-check-live",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Measure. Fix. Release. A local audio check and audience vote overlay.",
+  "license": "MIT",
+  "engines": { "node": ">=20.19.0" },
+  "scripts": {
+    "setup": "npm install && npm run dev",
+    "dev": "tsx watch server/index.ts",
+    "build": "tsc --noEmit && vite build",
+    "start": "tsx server/index.ts --production",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check": "npm test && npm run build && npm run test:e2e"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^22.18.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  }
+}
