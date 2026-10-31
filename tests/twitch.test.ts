@@ -29,6 +29,7 @@ describe('Twitch EventSub adapter with local socket fixtures', () => {
     session.setAudio(true, 'Test input'); session.meters(goodFrame({ measurementId: session.state.runId }));
     fetcher = vi.fn(async (url: string) => url.includes('validate')
       ? new Response(JSON.stringify({ client_id: 'client', user_id: '123', login: 'broadcaster', scopes: ['user:read:chat', 'channel:read:redemptions'] }))
+      : url.includes('/channel_points/custom_rewards') ? new Response(JSON.stringify({ data: [] }))
       : new Response(JSON.stringify({ data: [] }), { status: 202 }));
     vi.stubGlobal('fetch', fetcher);
     bridge = new TwitchBridge({ clientId: 'client', token: 'local-test-token', rewardTitle: 'Request a release check' }, session);
@@ -37,13 +38,28 @@ describe('Twitch EventSub adapter with local socket fixtures', () => {
   const settled = async () => { await vi.advanceTimersByTimeAsync(0); };
   it('validates credentials and creates chat and reward subscriptions on the welcome session', async () => {
     await bridge.start(); welcome(socket()); await settled();
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(4);
     const body = JSON.parse(fetcher.mock.calls[1][1]?.body as string);
     expect(body.type).toBe('channel.chat.message');
     expect(body.condition).toEqual({ broadcaster_user_id: '123', user_id: '123' });
     expect(body.transport.session_id).toBe('abc');
     expect(session.state.twitchDetail).toBe('Chat + channel points connected');
     expect(JSON.stringify(session.state)).not.toContain('local-test-token');
+  });
+  it('keeps real chat commands working when the rewards API rejects an ineligible channel', async () => {
+    const normalResponse = fetcher.getMockImplementation()!;
+    fetcher.mockImplementation(async (url: string) => url.includes('/channel_points/custom_rewards')
+      ? new Response(JSON.stringify({ error: 'Forbidden', status: 403, message: 'The broadcaster must have partner or affiliate status.' }), { status: 403 })
+      : normalResponse(url));
+    await bridge.start(); welcome(socket()); await settled();
+    expect(session.state.twitchStatus).toBe('connected');
+    expect(session.state.twitchDetail).toBe('Chat connected · channel points unavailable');
+    expect(session.state.chat.some(entry => entry.text.includes('Partner or Affiliate'))).toBe(true);
+    const subscriptions = fetcher.mock.calls.filter(([url]) => String(url).includes('/eventsub/subscriptions'));
+    expect(subscriptions).toHaveLength(1);
+    expect(JSON.parse(subscriptions[0][1].body as string).type).toBe('channel.chat.message');
+    socket().emit('message', event('notification', { event: { chatter_user_name: 'broadcaster', chatter_user_id: '123', message: { text: '!check' } } }, 'channel.chat.message'));
+    expect(session.state.phase).toBe('checking');
   });
   it('routes commands, ignores unrelated rewards, and deduplicates deliveries', async () => {
     await bridge.start(); welcome(socket()); await settled();
@@ -64,12 +80,12 @@ describe('Twitch EventSub adapter with local socket fixtures', () => {
     old.emit('message', event('session_reconnect', { session: { reconnect_url: 'wss://eventsub.wss.twitch.tv/ws?reconnect=fixture' } }));
     expect(old.closed).toBe(false); expect(socket(1).url).toContain('reconnect=fixture');
     welcome(socket(1), 'migrated'); await settled();
-    expect(old.closed).toBe(true); expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(old.closed).toBe(true); expect(fetcher).toHaveBeenCalledTimes(4);
   });
   it('reconnects after a lost session and stops on subscription revocation', async () => {
     await bridge.start(); welcome(socket()); await settled(); socket().close();
     await vi.advanceTimersByTimeAsync(1001); expect(instances).toHaveLength(2);
-    welcome(socket(1), 'replacement'); await settled(); expect(fetcher).toHaveBeenCalledTimes(5);
+    welcome(socket(1), 'replacement'); await settled(); expect(fetcher).toHaveBeenCalledTimes(7);
     socket(1).emit('message', event('revocation', { subscription: { type: 'channel.chat.message', status: 'authorization_revoked' } }));
     expect(session.state.twitchStatus).toBe('error'); expect(socket(1).closed).toBe(true);
     await vi.advanceTimersByTimeAsync(60000); expect(instances).toHaveLength(2);

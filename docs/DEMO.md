@@ -14,3 +14,11 @@ Click **Original** to remove the added processing. **Play/Pause** retains the tr
 For the broadcast view, click **Open OBS overlay** or add `http://127.0.0.1:5173/overlay` as a 1920 × 1080 OBS Browser Source. Its page background is transparent. The card shows the same score, top issue, vote bar and revealed fix. Keep the control-room tab open; the overlay displays the session and does not play audio.
 
 After restarting the computer, run `npm run dev` again and reload the page. Session history is kept in memory and clears when the server restarts. Local tracks must be selected again.
+
+## Using real Twitch chat
+
+After setting the Twitch credentials and `MODE=twitch` in `.env`, restart the server and refresh the control room at `http://127.0.0.1:5173`. Confirm **Live on Twitch**, load your own track, and follow the same Original → Hot master sequence above. Send `!check`, `!fix`, `!ready` and `!notyet` in your Twitch channel's chat. Simulated audience messages and votes are disabled in this mode.
+
+The score and votes also appear at `http://127.0.0.1:5173/overlay`. Set up OBS at 1920 × 1080, confirm the track can be heard in your broadcast mix, then capture the real Twitch commands and overlay response. Record about 30 seconds scrolling the actual Codex chat as a separate segment. Desktop recording and broadcast output need a local recorder such as OBS.
+
+If the rewards API reports that the broadcaster needs Partner or Affiliate status, keep `TWITCH_REWARD_ID=` empty and demonstrate the chat commands. Channel Points redemption is unavailable for that account until Twitch grants eligibility; an accepted EventSub connection does not establish that the channel can offer a reward.

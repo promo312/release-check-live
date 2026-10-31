@@ -149,11 +149,18 @@ export class TwitchBridge {
     const hasRewardScope = this.scopes.includes('channel:read:redemptions') || this.scopes.includes('channel:manage:redemptions');
     if (hasRewardScope) {
       try {
+        // EventSub can accept this subscription for a channel that cannot yet
+        // offer rewards. Verify reward access before claiming it is usable.
+        const rewards = await fetch(`https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id=${encodeURIComponent(this.broadcaster)}`, {
+          headers: { 'Client-Id': this.config.clientId, Authorization: `Bearer ${this.config.token}` }, signal: AbortSignal.timeout(8000),
+        });
+        if (rewards.status === 403) throw new Error('Chat is connected. Channel Points rewards require Partner or Affiliate status for this channel.');
+        if (!rewards.ok) throw new Error('Chat is connected. Channel points could not be connected; check broadcaster eligibility and reward permissions.');
         await create('channel.channel_points_custom_reward_redemption.add', {
           broadcaster_user_id: this.broadcaster, ...(this.config.rewardId ? { reward_id: this.config.rewardId } : {}),
         });
         this.rewardsReady = true;
-      } catch { this.session.log('Release Check', 'Chat is connected. Channel points could not be connected; check broadcaster eligibility and reward permissions.'); }
+      } catch (error) { this.session.log('Release Check', error instanceof Error && error.message.startsWith('Chat is connected.') ? error.message : 'Chat is connected. Channel points could not be connected; check broadcaster eligibility and reward permissions.'); }
     }
     if (!this.stopped) this.status('connected', this.chatReady && this.rewardsReady ? 'Chat + channel points connected' : 'Chat connected · channel points unavailable');
   }

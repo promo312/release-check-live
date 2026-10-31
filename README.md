@@ -83,6 +83,8 @@ The bridge validates the token and client ID at startup and revalidates periodic
 
 Credentials stay in the server process and the ignored `.env` file. They never appear in browser snapshots. There is no automatic token refresh; if authorization expires or is revoked, obtain a new user token and restart. The server binds to loopback and accepts local WebSocket origins; this is a personal local tool, not an internet-facing hosting configuration.
 
+The app stays on **port 5173** after authorization. The Twitch CLI's port 3000 is a temporary OAuth callback and closes when authorization completes. If Twitch's rewards API returns **403: “The broadcaster must have partner or affiliate status,”** keep `TWITCH_REWARD_ID=` empty. The app reports **Chat connected · channel points unavailable** and chat commands continue to work. A 401 missing-scope response requires a new user token with `channel:read:redemptions`; use the token command above. See [Get Custom Reward](https://dev.twitch.tv/docs/api/reference/#get-custom-reward).
+
 ## Commands
 
 | Command | Behavior |
@@ -132,7 +134,7 @@ tests/                  Numeric, fixture, and browser checks
 
 ## Current scope
 
-The local demo is implemented and tested. The Twitch adapter has fixture-based tests; **a real Twitch-channel and OBS end-to-end run still needs your broadcaster credentials and local audio routing**. No competition entry or video has been submitted. Competition rules in the supplied handoff are context, not independently verified eligibility or deadline guidance.
+The local demo is implemented and tested. A real broadcaster token and Twitch chat EventSub subscription have been verified. The adapter also has fixture-based tests, including an ineligible channel whose chat commands keep working. **A complete real-chat round, OBS broadcast and video recording remain to be verified.** No competition entry or video has been submitted. Competition rules in the supplied handoff are context, not independently verified eligibility or deadline guidance.
 
 Build provenance: this project was created in OpenAI Codex, in a new folder outside the Vrenvo repository. Session ID: `01a1934e-20d6-7c62-9dce-727bcd7e85a3`. No Vrenvo packages or services are used.
 
