@@ -25,8 +25,8 @@ export interface MeterFrame {
   rms: number | null;
   left: number | null;
   right: number | null;
-  /** Short-term (3 s) left minus right level, dB. */
-  balance: number | null;
+  /** Short-term (3 s) left minus right level, dB. Absent from builds before the balance check. */
+  balance?: number | null;
   bands: number[];
   sampleRate: number;
   clipRatio: number;

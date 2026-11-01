@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ReleaseSession, validMeter } from '../server/session';
+import type { MeterFrame } from '../src/core/types';
 import { goodFrame } from './helpers';
 
 describe('check and voting lifecycle', () => {
@@ -57,6 +58,19 @@ describe('check and voting lifecycle', () => {
     session.meters(goodFrame({ measurementId: session.state.runId }));
     session.command('alice', 'a', '!check'); finishCheck();
     expect(session.state.history[0].source).toBe('Live input');
+  });
+  it('accepts frames from older clients without a balance reading and skips the balance check', () => {
+    const legacy = (overrides: Partial<MeterFrame>) => { const { balance: _, ...frame } = goodFrame(overrides); return frame as MeterFrame; };
+    expect(validMeter(legacy({}))).toBe(true);
+    session.meters(legacy({ measurementId: session.state.runId }));
+    session.command('alice', 'a', '!check');
+    for (let i = 1; i <= 30; i++) {
+      clock += 1000;
+      session.meters(legacy({ measurementId: session.state.runId, seconds: i })); session.tick();
+    }
+    expect(session.state.phase).toBe('voting');
+    expect(session.state.result!.score).toBe(100);
+    expect(session.state.result!.findings.map(f => f.id)).not.toContain('balance');
   });
   it('scores a sustained L/R gap collected from frames during the check', () => {
     session.command('alice', 'a', '!check');

@@ -13,7 +13,8 @@ export function validMeter(value: unknown): value is MeterFrame {
   for (const key of ['shortTerm', 'momentary', 'integrated', 'truePeak', 'peakHold', 'rms', 'left', 'right']) {
     if (m[key] !== null && !finite(m[key], -300, 100)) return false;
   }
-  if (m.balance !== null && !finite(m.balance, -100, 100)) return false;
+  // Older clients omit balance; their frames still count, without a balance check.
+  if (m.balance !== undefined && m.balance !== null && !finite(m.balance, -100, 100)) return false;
   if (m.correlation !== null && !finite(m.correlation, -1, 1)) return false;
   if (!finite(m.width, 0, 101) || !finite(m.crest, 0, 200) || !finite(m.bassRatio, 0, 1)) return false;
   if (!finite(m.clipRatio, 0, 1)) return false;
