@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { ReleaseSession } from '../server/session';
 import { goodFrame } from './helpers';
 
@@ -22,7 +22,7 @@ const event = (type: string, payload: unknown, subscription_type?: string, messa
 const welcome = (ws: FakeSocket, session = 'abc') => ws.emit('message', event('session_welcome', { session: { id: session, keepalive_timeout_seconds: 30 } }));
 
 describe('Twitch EventSub adapter with local socket fixtures', () => {
-  let session: ReleaseSession, bridge: TwitchBridge, fetcher: ReturnType<typeof vi.fn>;
+  let session: ReleaseSession, bridge: TwitchBridge, fetcher: Mock<(...args: any[]) => any>;
   beforeEach(() => {
     vi.useFakeTimers(); instances.length = 0;
     session = new ReleaseSession(() => Date.now(), 'twitch');
