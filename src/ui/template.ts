@@ -44,7 +44,7 @@ export const controlRoom = () => `
               <div class="vote-totals"><div><span class="vote-label ready-label"><span class="dot"></span> Ready</span><strong id="ready-count">0</strong></div><span class="vote-versus">vs.</span><div><span class="vote-label notyet-label">Not yet <span class="dot"></span></span><strong id="notyet-count">0</strong></div></div>
               <div class="vote-bar" aria-label="Vote split"><div id="ready-bar"></div><div id="notyet-bar"></div></div>
               <div class="vote-actions"><button id="vote-ready" class="vote-button" disabled>${icon('check')} <span>Ready</span><kbd>!ready</kbd></button><button id="vote-notyet" class="vote-button" disabled>${icon('refresh')} <span>Not yet</span><kbd>!notyet</kbd></button></div>
-              <div class="vote-footnote" id="vote-footnote">One vote per person. You can change your vote.</div>
+              <div class="vote-footnote" id="vote-footnote"><strong id="vote-count">0 votes</strong> · One vote per person. You can change your vote. Three votes give a result.</div>
             </section>
           </div>
           <section class="card meters-card" aria-label="Audio meters">
@@ -85,7 +85,7 @@ export const overlay = () => `
       <div class="overlay-progress"><i id="ov-progress"></i></div>
     </div>
     <div class="overlay-metrics"><div><span>SHORT-TERM</span><strong id="ov-short">—</strong><small>LUFS</small></div><div><span>INTEGRATED</span><strong id="ov-integrated">—</strong><small>LUFS</small></div><div><span>TRUE PEAK</span><strong id="ov-peak">—</strong><small>dBTP</small></div><div><span>WIDTH</span><strong id="ov-width">—</strong><small>%</small></div></div>
-    <div class="overlay-votes"><span><b id="ov-ready">0</b> !ready</span><div aria-label="Chat vote bar"><i id="ov-vote-bar"></i></div><span><b id="ov-notyet">0</b> !notyet</span></div>
+    <div class="overlay-votes"><span><b id="ov-ready">0</b> !ready</span><div aria-label="Chat vote bar"><i id="ov-vote-bar"></i></div><span><b id="ov-notyet">0</b> !notyet</span><small id="ov-vote-count">0 votes</small></div>
     <div id="ov-fix" hidden></div><footer><span id="ov-mode">Demo chat · Simulated votes</span><span>BY NINJA MDE</span></footer>
   </div>
 `;

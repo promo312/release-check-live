@@ -89,7 +89,7 @@ export interface DspReading {
   seconds: number; shortTerm: number | null; momentary: number | null;
   integrated: number | null; truePeak: number | null; peakHold: number | null;
   correlation: number | null; width: number; crest: number; bassRatio: number;
-  rms: number | null; left: number | null; right: number | null; sampleRate: number; clipRatio: number;
+  rms: number | null; left: number | null; right: number | null; balance: number | null; sampleRate: number; clipRatio: number;
 }
 
 export class StereoMeter {
@@ -169,6 +169,7 @@ export class StereoMeter {
       bassRatio: total > 1e-16 ? Math.min(1, average('bass') / total) : 0,
       rms: amplitudeToDb(Math.sqrt(mean)),
       left: amplitudeToDb(Math.sqrt(recent?.l ?? 0)), right: amplitudeToDb(Math.sqrt(recent?.r ?? 0)),
+      balance: total > 1e-16 ? Math.max(-60, Math.min(60, 10 * Math.log10(Math.max(l, 1e-16) / Math.max(r, 1e-16)))) : null,
       sampleRate: this.rate,
       clipRatio: this.total ? this.fullScaleSamples / (this.total * 2) : 0,
     };

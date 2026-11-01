@@ -1,10 +1,12 @@
+import { checkBalance, type BalanceFrame } from './balance';
 import type { CheckResult, Finding, MasterPreset, MeterFrame } from './types';
 
 export const TARGET = { lufs: -14, tolerance: 2, peak: -1, minCrest: 6 };
 const round = (n: number) => Math.round(n * 10) / 10;
 
-/** House preferences, not a release certification. Audience votes never change this score. */
-export function scoreCheck(meters: MeterFrame, checkedAt = Date.now(), preset: MasterPreset = 'original'): CheckResult | null {
+/** House preferences, not a release certification. Audience votes never change this score.
+ * `balance` is the short-term L/R gap sampled through the check window. */
+export function scoreCheck(meters: MeterFrame, checkedAt = Date.now(), preset: MasterPreset = 'original', balance: readonly BalanceFrame[] = []): CheckResult | null {
   if (meters.seconds < 28 || meters.integrated === null || meters.integrated < -60 || meters.peakHold === null) return null;
   const findings: Finding[] = [];
   const add = (finding: Finding) => findings.push(finding);
@@ -39,7 +41,17 @@ export function scoreCheck(meters: MeterFrame, checkedAt = Date.now(), preset: M
     fix: 'Reduce limiting or bus compression and compare the punch at matched loudness.',
     deduction: Math.min(15, (TARGET.minCrest - meters.crest) * 3),
   });
+  const stereo = checkBalance(balance);
+  if (stereo) add({
+    id: 'balance', title: `Stereo balance off: left/right differ by ${stereo.meanGap.toFixed(1)} dB`,
+    detail: `Left and right stayed more than 3 dB apart for ${stereo.seconds} s in a row.`,
+    fix: 'Check pan positions and channel gains on the master bus. Centre the main elements, then compare both sides at matched level.',
+    deduction: stereo.deduction,
+  });
   findings.sort((a, b) => b.deduction - a.deduction);
+  // A sustained balance problem leads, whatever its deduction.
+  const lead = findings.findIndex(f => f.id === 'balance');
+  if (lead > 0) findings.unshift(...findings.splice(lead, 1));
   const score = Math.max(0, Math.min(100, Math.round(100 - findings.reduce((a, b) => a + b.deduction, 0))));
   return {
     score, label: score >= 85 ? 'In good shape' : score >= 65 ? 'A little more care' : 'Room to refine', findings,

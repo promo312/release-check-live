@@ -94,7 +94,7 @@ The app stays on **port 5173** after authorization. The Twitch CLI's port 3000 i
 | `!notyet` | Vote not yet, replacing the same user’s previous vote if needed. |
 | `!fix` | Reveal the largest measured issue’s suggestion after a check. |
 
-Twitch user IDs identify voters; repeated messages do not add votes. Every local control-room vote is one person (`you`). Ties and rounds with no votes have explicit verdicts. Audience votes do not change the audio score. Demo voters are labeled as simulated and are disabled in Twitch mode.
+Twitch user IDs identify voters; repeated messages do not add votes. Every local control-room vote is one person (`you`). Fewer than three votes reads “Too few votes”; three or more give ready, not yet, or tied. The count is always shown. Audience votes do not change the audio score. Demo voters are labeled as simulated and are disabled in Twitch mode.
 
 ## What the meters and score mean
 

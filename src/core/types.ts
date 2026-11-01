@@ -25,6 +25,8 @@ export interface MeterFrame {
   rms: number | null;
   left: number | null;
   right: number | null;
+  /** Short-term (3 s) left minus right level, dB. */
+  balance: number | null;
   bands: number[];
   sampleRate: number;
   clipRatio: number;
@@ -46,6 +48,17 @@ export interface CheckResult {
   fix: string;
   meters: MeterFrame;
   checkedAt: number;
+}
+
+export interface HistoryEntry {
+  score: number;
+  topIssue: string;
+  time: number;
+  verdict: string | null;
+  /** Added later; older entries may lack these. */
+  source?: string;
+  integrated?: number | null;
+  truePeak?: number | null;
 }
 
 export interface ChatEntry {
@@ -73,7 +86,7 @@ export interface SessionState {
   verdict: string | null;
   fixVisible: boolean;
   chat: ChatEntry[];
-  history: { score: number; topIssue: string; time: number; verdict: string | null }[];
+  history: HistoryEntry[];
 }
 
 export type ClientMessage =

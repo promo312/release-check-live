@@ -1,6 +1,8 @@
 import './style.css';
 import { AudioEngine } from './audio/engine';
 import { COMMANDS, type AudioSourceKind, type ClientMessage, type DemoProfile, type MasterPreset, type ServerMessage, type SessionState } from './core/types';
+import { historyLabel } from './core/history';
+import { voteCount } from './core/votes';
 import { icon } from './ui/icons';
 import { audioStatus, chatStatus } from './ui/status';
 import { controlRoom, overlay } from './ui/template';
@@ -144,6 +146,7 @@ function render() {
   put('vote-description', voting ? 'Send !ready or !notyet in chat.' : state.phase === 'complete' ? 'Your ears make the final call.' : 'Voting opens after the check.');
   put('ready-count', String(state.votes.ready)); put('notyet-count', String(state.votes.notyet));
   const total = state.votes.ready + state.votes.notyet;
+  put('vote-count', voteCount(total));
   el('ready-bar').style.width = `${total ? state.votes.ready / total * 100 : 0}%`;
   el('notyet-bar').style.width = `${total ? state.votes.notyet / total * 100 : 0}%`;
   disabled('vote-ready', !can || !voting); disabled('vote-notyet', !can || !voting);
@@ -190,8 +193,8 @@ function renderHistory() {
     const score = document.createElement('strong'); score.textContent = String(entry.score);
     const title = document.createElement('span'); title.textContent = entry.topIssue;
     const verdict = document.createElement('small'); verdict.textContent = entry.verdict ?? 'Vote in progress';
-    const time = document.createElement('time'); time.textContent = new Date(entry.time).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false });
-    row.append(score, title, verdict, time); fragment.append(row);
+    const label = document.createElement('time'); label.dateTime = new Date(entry.time).toISOString(); label.textContent = historyLabel(entry);
+    row.append(score, title, verdict, label); fragment.append(row);
   }
   el('history-list').replaceChildren(fragment);
 }
@@ -220,6 +223,7 @@ function renderOverlay() {
   }
   el('ov-progress').style.width = `${progress * 100}%`;
   put('ov-ready', String(state.votes.ready)); put('ov-notyet', String(state.votes.notyet));
+  put('ov-vote-count', voteCount(state.votes.ready + state.votes.notyet));
   const total = state.votes.ready + state.votes.notyet;
   el('ov-vote-bar').style.width = `${total ? state.votes.ready / total * 100 : 50}%`;
   hide('ov-fix', !connected || !state.fixVisible); put('ov-fix', state.result?.fix ?? '');

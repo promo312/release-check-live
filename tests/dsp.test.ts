@@ -88,3 +88,11 @@ function requireReference(file: string, rate: number) {
   if (result.status !== 0) throw new Error('FFmpeg reference execution failed');
   return result.stderr;
 }
+
+it('reports the short-term left/right level gap in dB', () => {
+  const meter = new StereoMeter(48000);
+  const left = sine(48000, 3.5), right = left.map(v => v * 10 ** (-4 / 20));
+  meter.process(left, right);
+  expect(meter.read().balance).toBeCloseTo(4, 1);
+  expect(new StereoMeter(48000).read().balance).toBeNull();
+});

@@ -36,6 +36,8 @@ width      = 100 sqrt(sideEnergy / (midEnergy + sideEnergy))
 crest      = 20 log10(peakInWindow / sqrt((LL + RR) / 2))
 ```
 
+`balance = 10 log10(LL / RR)` is the short-term left/right level gap in dB, clamped to ±60. The check samples it every 100 ms.
+
 Identical channels yield width 0 and correlation +1. Uncorrelated equal-power channels yield about 70.7% width. Opposing equal-power channels yield width 100 and correlation −1. A silent channel makes correlation unavailable. Negative correlation is a prompt to listen in mono, not proof of a musical fault. The frequency graphic is an FFT visualization of the channel sum, not part of loudness or scoring.
 
 ## Score
@@ -51,8 +53,9 @@ Start at 100. Deductions are independent except that full-scale samples and exce
 | Integrated `L` outside `−14 ±2 LU` | `min(25, 5 × (abs(L + 14) − 2))` |
 | Correlation `c < 0` | `min(25, 10 + 15 × abs(c))` |
 | Crest `d < 6 dB` | `min(15, 3 × (6 − d))` |
+| Short-term L/R gap `abs(g) > 3 dB` for one continuous stretch longer than 3 s | `min(25, 15 + (X − 3))`, X = mean `abs(g)` over the longest such stretch |
 
-Round `100 − sum(deductions)` to the nearest integer, clamp to 0–100, and rank findings by deduction. The first finding supplies the headline and suggested fix. Scores ≥85 are “In good shape”; ≥65 are “A little more care”; lower scores are “Room to refine”. When every metric is in range, the suggestion is a matched-loudness reference comparison and a mono check.
+Round `100 − sum(deductions)` to the nearest integer, clamp to 0–100, and rank findings by deduction, except that a stereo balance finding always comes first (“Stereo balance off: left/right differ by X dB”). The first finding supplies the headline and suggested fix. Scores ≥85 are “In good shape”; ≥65 are “A little more care”; lower scores are “Room to refine”. When every metric is in range, the suggestion is a matched-loudness reference comparison and a mono check.
 
 The −14 LUFS target is a selectable project preference in code, not a requirement of BS.1770 or a universal mastering target. Width and the diagnostic low-frequency energy ratio do not deduct points. The latter is deliberately not used to infer weak bass. The result represents this excerpt and these measured properties; it does not assess a whole song or predict listener response.
 

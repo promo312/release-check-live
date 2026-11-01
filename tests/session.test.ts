@@ -24,6 +24,7 @@ describe('check and voting lifecycle', () => {
     expect(session.state.votes.ready).toBe(1);
     session.command('alice', 'a', '!notyet'); session.command('bob', 'b', '!ready');
     expect(session.state.votes).toEqual({ ready: 1, notyet: 1 });
+    session.command('dana', 'd', '!ready'); session.command('eli', 'e', '!notyet');
     clock += 20000; session.tick(); expect(session.state.verdict).toBe('Chat result: tied');
     expect(session.command('chris', 'c', '!ready')).toContain('Voting opens');
     session.command('alice', 'a', '!fix'); expect(session.state.fixVisible).toBe(true);
@@ -40,7 +41,31 @@ describe('check and voting lifecycle', () => {
   });
   it('reports no verdict when nobody votes', () => {
     session.reward('alice'); finishCheck(); clock += 20000; session.tick();
-    expect(session.state.verdict).toBe('Chat result: no votes');
+    expect(session.state.verdict).toBe('Too few votes');
+    expect(session.state.chat.at(-1)!.text).toBe('Chat result: too few votes (0 votes). 0 ready · 0 not yet.');
+  });
+  it('needs three votes for a chat result and always reports the count', () => {
+    session.command('alice', 'a', '!check'); finishCheck();
+    session.command('bob', 'b', '!notyet'); clock += 20000; session.tick();
+    expect(session.state.verdict).toBe('Too few votes'); expect(session.state.history[0].verdict).toBe('Too few votes');
+    expect(session.state.chat.at(-1)!.text).toBe('Chat result: too few votes (1 vote). 0 ready · 1 not yet.');
+  });
+  it('records source, integrated loudness and true peak on each history entry', () => {
+    session.command('alice', 'a', '!check'); finishCheck();
+    expect(session.state.history[0]).toMatchObject({ source: 'Test input', integrated: -14, truePeak: -2 });
+    session.reset(); session.setAudio(true, 'USB interface', { kind: 'input', preset: 'original', paused: false, muted: true });
+    session.meters(goodFrame({ measurementId: session.state.runId }));
+    session.command('alice', 'a', '!check'); finishCheck();
+    expect(session.state.history[0].source).toBe('Live input');
+  });
+  it('scores a sustained L/R gap collected from frames during the check', () => {
+    session.command('alice', 'a', '!check');
+    for (let i = 1; i <= 30; i++) {
+      clock += 1000;
+      session.meters(goodFrame({ measurementId: session.state.runId, seconds: i, balance: i >= 10 && i < 16 ? -5 : 0 })); session.tick();
+    }
+    expect(session.state.result!.topIssue).toBe('Stereo balance off: left/right differ by 5.0 dB');
+    expect(session.state.result!.score).toBe(83);
   });
   it('separates simulated votes from Twitch mode and resets the round without losing history', () => {
     session.command('alice', 'a', '!check'); finishCheck(); clock += 5000; session.tick();
@@ -71,6 +96,8 @@ it('rejects malformed and nonfinite meter frames before accepting WebSocket data
   expect(validMeter(goodFrame({ integrated: NaN }))).toBe(false);
   expect(validMeter(goodFrame({ bands: [Infinity] }))).toBe(false);
   expect(validMeter(goodFrame({ clipRatio: -1 }))).toBe(false);
+  expect(validMeter(goodFrame({ balance: null }))).toBe(true);
+  expect(validMeter(goodFrame({ balance: Infinity }))).toBe(false);
   expect(validMeter({ type: 'meters' })).toBe(false);
   expect(validMeter(null)).toBe(false);
 });

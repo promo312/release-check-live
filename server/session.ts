@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import type { BalanceFrame } from '../src/core/balance';
 import { scoreCheck } from '../src/core/scoring';
+import { chatVerdict } from '../src/core/votes';
 import { COMMANDS, type Command, type MeterFrame, type SessionState } from '../src/core/types';
 
 export function validMeter(value: unknown): value is MeterFrame {
@@ -11,6 +13,7 @@ export function validMeter(value: unknown): value is MeterFrame {
   for (const key of ['shortTerm', 'momentary', 'integrated', 'truePeak', 'peakHold', 'rms', 'left', 'right']) {
     if (m[key] !== null && !finite(m[key], -300, 100)) return false;
   }
+  if (m.balance !== null && !finite(m.balance, -100, 100)) return false;
   if (m.correlation !== null && !finite(m.correlation, -1, 1)) return false;
   if (!finite(m.width, 0, 101) || !finite(m.crest, 0, 200) || !finite(m.bassRatio, 0, 1)) return false;
   if (!finite(m.clipRatio, 0, 1)) return false;
@@ -21,6 +24,7 @@ export class ReleaseSession {
   readonly state: SessionState;
   private sequence = 0;
   private voters = new Map<string, 'ready' | 'notyet'>();
+  private balance: BalanceFrame[] = [];
   private lastMeterAt = 0;
   private demoVoteIndex = 0;
   private demoVoteAt = 0;
@@ -66,6 +70,7 @@ export class ReleaseSession {
     if (frame.measurementId !== this.state.runId) return;
     this.state.meters = frame;
     this.lastMeterAt = this.now();
+    if (this.state.phase === 'checking' && this.balance.length < 3000) this.balance.push({ seconds: frame.seconds, gap: frame.balance ?? null });
   }
 
   command(name: string, userId: string, command: string, log = true): string | null {
@@ -103,6 +108,7 @@ export class ReleaseSession {
     this.state.checkEndsAt = this.now() + this.checkMs;
     this.state.voteEndsAt = null; this.state.result = null; this.state.fixVisible = false;
     this.state.verdict = null; this.state.votes = { ready: 0, notyet: 0 }; this.voters.clear();
+    this.balance = [];
     this.log('Release Check', `${name} started a 30-second release check. Keep the track playing.`);
     return null;
   }
@@ -134,13 +140,17 @@ export class ReleaseSession {
     }
     if (this.state.phase === 'checking' && this.now() >= this.state.checkEndsAt!) {
       const frame = this.state.meters;
-      const result = frame?.measurementId === this.state.runId ? scoreCheck(frame, this.now(), this.state.audioDetails.preset) : null;
+      const result = frame?.measurementId === this.state.runId ? scoreCheck(frame, this.now(), this.state.audioDetails.preset, this.balance) : null;
       if (!result) { this.cancel('Not enough audible material for a score. Play a continuous 30-second section and try again.'); return; }
       this.state.result = result; this.state.phase = 'voting';
       this.state.checkEndsAt = null; this.state.voteEndsAt = this.now() + this.voteMs;
       this.demoVoteIndex = 0; this.demoVoteAt = this.now() + 1200;
       this.log('Release Check', `${result.score}/100 · ${result.topIssue}. Vote !ready or !notyet. You have 20 seconds.`);
-      this.state.history.unshift({ score: result.score, topIssue: result.topIssue, time: result.checkedAt, verdict: null });
+      this.state.history.unshift({
+        score: result.score, topIssue: result.topIssue, time: result.checkedAt, verdict: null,
+        source: this.state.audioDetails.kind === 'input' ? 'Live input' : this.state.audioSource,
+        integrated: result.meters.integrated, truePeak: result.meters.peakHold,
+      });
       this.state.history = this.state.history.slice(0, 12);
     }
     if (this.state.phase === 'voting') {
@@ -151,11 +161,11 @@ export class ReleaseSession {
         this.demoVoteAt = this.now() + 1500;
       }
       if (this.now() >= this.state.voteEndsAt!) {
-        const { ready, notyet } = this.state.votes;
-        this.state.verdict = ready + notyet === 0 ? 'Chat result: no votes' : ready === notyet ? 'Chat result: tied' : ready > notyet ? 'Chat result: ready' : 'Chat result: not yet';
+        const result = chatVerdict(this.state.votes);
+        this.state.verdict = result.verdict;
         this.state.phase = 'complete'; this.state.voteEndsAt = null;
         this.state.history[0].verdict = this.state.verdict;
-        this.log('Release Check', `${this.state.verdict}. ${ready} ready · ${notyet} not yet.`);
+        this.log('Release Check', result.message);
       }
     }
   }
