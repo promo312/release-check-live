@@ -4,11 +4,15 @@
 
 By Ninja MDE (Vadim Timchenko).
 
+Demo video: `<YouTube link>`
+
 A local control room and transparent OBS overlay for music producers. Measure the audio, run a 30-second check, then let the audience vote on the next step. The default demo works without a Twitch account, credentials, recordings, or paid services.
 
 ## Browser verification
 
-At 1920 × 1080 and 100% zoom, the same locally loaded reference WAV measured **100/100 in Original** and **50/100 in Hot master**. The second check reported clipping and displayed its fix. These images show demo chat; a real Twitch-channel recording is pending account setup.
+At 1920 × 1080 and 100% zoom, the same locally loaded reference WAV measured **100/100 in Original** and **50/100 in Hot master**. The second check reported clipping and displayed its fix. These images show demo chat.
+
+The app has also run live on the Twitch channel [ninjamde](https://www.twitch.tv/ninjamde), with `!check`, `!ready`/`!notyet`, and `!fix`, app replies posted in Twitch chat, and the OBS overlay. [Channel-point rewards require Affiliate or Partner status](https://dev.twitch.tv/docs/api/reference#create-custom-rewards), so demo mode simulates reward redemptions for judging.
 
 [Original: 100/100](docs/screenshots/original-1920.png)
 
@@ -138,7 +142,7 @@ tests/                  Numeric, fixture, and browser checks
 
 ## Current scope
 
-The local demo is implemented and tested. A real broadcaster token and Twitch chat EventSub subscription have been verified. The adapter also has fixture-based tests, including an ineligible channel whose chat commands keep working. **A complete real-chat round, OBS broadcast and video recording remain to be verified.** No competition entry or video has been submitted. Competition rules in the supplied handoff are context, not independently verified eligibility or deadline guidance.
+The local demo is implemented and tested. A real broadcaster token and Twitch chat EventSub subscription have been verified. The adapter also has fixture-based tests, including an ineligible channel whose chat commands keep working. **Live Twitch chat commands, app replies in chat, and the OBS overlay have run on ninjamde; the demo-video link will be added above.** No competition entry or video has been submitted. Competition rules in the supplied handoff are context, not independently verified eligibility or deadline guidance.
 
 Build provenance: this project was created in OpenAI Codex, in a new folder outside the Vrenvo repository. Session ID: `01a1934e-20d6-7c62-9dce-727bcd7e85a3`. No Vrenvo packages or services are used.
 
