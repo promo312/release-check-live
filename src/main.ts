@@ -47,6 +47,16 @@ function syncAudio() {
   } });
 }
 
+function reconcileAudio() {
+  if (!controller || busy || !engine || !state) return;
+  const details = state.audioDetails;
+  // Reannounce the retained source after reconnect, or if the server timed out
+  // while this tab's audio continued playing. Meter frames alone cannot do that.
+  if (state.audioActive !== engine.playing || state.audioSource !== (engine.loaded ? sourceName : 'No audio selected') ||
+    details.kind !== sourceType || details.preset !== engine.preset ||
+    details.paused !== (engine.loaded && !engine.playing) || details.muted !== engine.muted) syncAudio();
+}
+
 function connect() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=${isOverlay ? 'overlay' : 'controller'}`);
   ws.onopen = () => {
@@ -58,7 +68,7 @@ function connect() {
     let message: ServerMessage;
     try { message = JSON.parse(event.data) as ServerMessage; } catch { return; }
     if (message.type === 'role') {
-      if (controller && !message.controller) void engine?.stop();
+      if (!message.controller) void engine?.stop();
       controller = message.controller;
       if (!isOverlay) {
         hide('owner-notice', controller);
@@ -69,12 +79,14 @@ function connect() {
       connected = true;
       state = message.state; serverOffset = message.now - Date.now();
       if (state.runId !== lastRunId) { lastRunId = state.runId; engine?.reset(state.runId); }
+      reconcileAudio();
       render();
     }
   };
   ws.onclose = () => {
     connected = false; controller = false;
-    if (!isOverlay) void engine?.stop();
+    // Keep the decoded source and playback position through a transient outage.
+    // A role denial on reconnect stops it if another control room took ownership.
     render(); clearTimeout(retryTimer); retryTimer = setTimeout(connect, 1600);
   };
   ws.onerror = () => ws.close();
@@ -155,7 +167,7 @@ function render() {
   el('ready-bar').style.width = `${total ? state.votes.ready / total * 100 : 0}%`;
   el('notyet-bar').style.width = `${total ? state.votes.notyet / total * 100 : 0}%`;
   disabled('vote-ready', !can || !voting); disabled('vote-notyet', !can || !voting);
-  el('chat-mode').innerHTML = `<span class="dot"></span>${chatStatus(state, connected)}<span>${state.mode === 'demo' ? 'Simulated audience' : state.twitchStatus === 'connected' && connected ? 'Connected' : 'Not connected'}</span>`;
+  el('chat-mode').innerHTML = `<span class="dot"></span>${chatStatus(state, connected)}<span>${state.mode === 'demo' ? 'Simulated audience' : state.twitchStatus === 'connected' && connected ? state.twitchCanSendChat ? 'Connected' : 'Connected · replies unavailable' : 'Not connected'}</span>`;
   el<HTMLFormElement>('chat-form').hidden = state.mode !== 'demo';
   hide('demo-reward', state.mode !== 'demo'); disabled('demo-reward', !can || inRound);
   disabled('chat-input', !can);

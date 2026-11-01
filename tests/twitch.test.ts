@@ -28,7 +28,8 @@ describe('Twitch EventSub adapter with local socket fixtures', () => {
     session = new ReleaseSession(() => Date.now(), 'twitch');
     session.setAudio(true, 'Test input'); session.meters(goodFrame({ measurementId: session.state.runId }));
     fetcher = vi.fn(async (url: string) => url.includes('validate')
-      ? new Response(JSON.stringify({ client_id: 'client', user_id: '123', login: 'broadcaster', scopes: ['user:read:chat', 'channel:read:redemptions'] }))
+      ? new Response(JSON.stringify({ client_id: 'client', user_id: '123', login: 'broadcaster', scopes: ['user:read:chat', 'user:write:chat', 'channel:read:redemptions'] }))
+      : url.includes('/chat/messages') ? new Response(JSON.stringify({ data: [{ message_id: 'sent', is_sent: true }] }))
       : url.includes('/channel_points/custom_rewards') ? new Response(JSON.stringify({ data: [] }))
       : new Response(JSON.stringify({ data: [] }), { status: 202 }));
     vi.stubGlobal('fetch', fetcher);
@@ -72,6 +73,76 @@ describe('Twitch EventSub adapter with local socket fixtures', () => {
     socket().emit('message', event('notification', { event: { user_name: 'fan', reward: { id: 'r1', title: 'Other reward' } } }, 'channel.channel_points_custom_reward_redemption.add'));
     expect(session.state.phase).toBe('idle');
     socket().emit('message', event('notification', { event: { user_name: 'fan', reward: { id: 'r2', title: 'Request a release check' } } }, 'channel.channel_points_custom_reward_redemption.add'));
+    expect(session.state.phase).toBe('checking');
+  });
+  it('posts one ordered check acknowledgement, score/vote prompt, fix and result using the authorized user token', async () => {
+    await bridge.start(); welcome(socket()); await settled();
+    const command = (text: string, user = '123', messageId = String(++id)) =>
+      socket().emit('message', event('notification', { event: { chatter_user_name: 'listener', chatter_user_id: user, message: { text } } }, 'channel.chat.message', messageId));
+    command('!check', '123', 'one-check'); command('!check', '123', 'one-check');
+    await settled();
+    vi.setSystemTime(Date.now() + 30000);
+    session.meters(goodFrame({ measurementId: session.state.runId })); session.tick(); session.tick();
+    await settled();
+    command('!fix');
+    command('!ready', 'a'); command('!ready', 'b'); command('!notyet', 'c');
+    await settled();
+    vi.setSystemTime(Date.now() + 20000);
+    session.meters(goodFrame({ measurementId: session.state.runId })); session.tick(); session.tick();
+    await settled();
+    const posts = fetcher.mock.calls.filter(([url]) => String(url).endsWith('/chat/messages'));
+    const messages = posts.map(([, options]) => JSON.parse(options.body).message);
+    expect(messages).toHaveLength(4);
+    expect(messages[0]).toContain('started a 30-second release check');
+    expect(messages[1]).toContain('100/100');
+    expect(messages[1]).toContain('Vote !ready or !notyet');
+    expect(messages[2]).toBe(session.state.result!.fix);
+    expect(messages[3]).toBe('Chat result: ready (3 votes). 2 ready · 1 not yet.');
+    for (const [, options] of posts) {
+      expect(options.method).toBe('POST');
+      expect(options.headers.Authorization).toBe('Bearer local-test-token');
+      expect(options.headers['Client-Id']).toBe('client');
+      expect(JSON.parse(options.body)).toMatchObject({ broadcaster_id: '123', sender_id: '123' });
+    }
+    expect(JSON.stringify(session.state)).not.toContain('local-test-token');
+    bridge.stop(); session.announce('After shutdown'); await settled();
+    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith('/chat/messages'))).toHaveLength(4);
+  });
+  it('keeps commands, score and voting working without attempting replies when user:write:chat is absent', async () => {
+    fetcher.mockImplementation(async (url: string) => url.includes('validate')
+      ? new Response(JSON.stringify({ client_id: 'client', user_id: '123', scopes: ['user:read:chat'] }))
+      : new Response(JSON.stringify({ data: [] }), { status: 202 }));
+    await bridge.start(); welcome(socket()); await settled();
+    expect(session.state.twitchCanSendChat).toBe(false);
+    expect(session.state.twitchDetail).toContain('missing user:write:chat');
+    socket().emit('message', event('notification', { event: { chatter_user_name: 'listener', chatter_user_id: '123', message: { text: '!check' } } }, 'channel.chat.message'));
+    vi.setSystemTime(Date.now() + 30000);
+    session.meters(goodFrame({ measurementId: session.state.runId })); session.tick();
+    expect(session.state.result!.score).toBe(100);
+    expect(session.state.phase).toBe('voting');
+    session.command('listener', '123', '!ready');
+    vi.setSystemTime(Date.now() + 20000);
+    session.meters(goodFrame({ measurementId: session.state.runId })); session.tick(); await settled();
+    expect(session.state.verdict).toBe('Too few votes');
+    expect(session.state.twitchStatus).toBe('connected');
+    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith('/chat/messages'))).toHaveLength(0);
+  });
+  it.each([403, 200])('reports rejected or dropped chat replies (HTTP %i) without breaking EventSub or exposing tokens', async status => {
+    const normalResponse = fetcher.getMockImplementation()!;
+    fetcher.mockImplementation(async (url: string) => url.endsWith('/chat/messages')
+      ? new Response(JSON.stringify({ data: [{ is_sent: false }], message: 'local-test-token' }), { status })
+      : normalResponse(url));
+    await bridge.start(); welcome(socket()); await settled();
+    session.announce('Measured score: 100/100. Vote !ready or !notyet.'); await settled();
+    expect(session.state.twitchStatus).toBe('connected');
+    expect(session.state.chat.at(-1)!.text).toContain('reply could not be sent');
+    expect(JSON.stringify(session.state)).not.toContain('local-test-token');
+    if (status === 403) {
+      expect(session.state.twitchCanSendChat).toBe(false);
+      session.announce('No unauthorized retry'); await settled();
+      expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith('/chat/messages'))).toHaveLength(1);
+    }
+    socket().emit('message', event('notification', { event: { chatter_user_name: 'listener', chatter_user_id: '123', message: { text: '!check' } } }, 'channel.chat.message'));
     expect(session.state.phase).toBe('checking');
   });
   it('migrates to the reconnect URL without resubscribing, then closes the old socket', async () => {

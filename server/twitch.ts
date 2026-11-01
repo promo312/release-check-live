@@ -26,6 +26,8 @@ export class TwitchBridge {
   private chatReady = false;
   private rewardsReady = false;
   private scopes: string[] = [];
+  private unsubscribeAnnouncements?: () => void;
+  private replyQueue = Promise.resolve();
 
   constructor(private config: Config, private session: ReleaseSession) {}
 
@@ -33,6 +35,7 @@ export class TwitchBridge {
     try {
       await this.validate();
       if (this.stopped) return;
+      this.unsubscribeAnnouncements ??= this.session.onAnnouncement(text => this.queueReply(text));
       this.status('connecting', 'Connecting to Twitch EventSub');
       this.connect(ENDPOINT, false);
       this.revalidate = setInterval(() => { void this.validate().catch(() => {
@@ -51,10 +54,40 @@ export class TwitchBridge {
     if (data.client_id !== this.config.clientId) throw new Error('The Twitch token belongs to a different client ID.');
     if (!data.scopes.includes('user:read:chat')) throw new Error('The Twitch user token needs user:read:chat.');
     this.broadcaster = data.user_id; this.scopes = data.scopes;
+    this.session.state.twitchCanSendChat = this.scopes.includes('user:write:chat');
   }
 
   private status(status: 'connecting' | 'connected' | 'error', detail: string) {
-    this.session.state.twitchStatus = status; this.session.state.twitchDetail = detail;
+    this.session.state.twitchStatus = status;
+    const replies = !this.scopes.includes('user:write:chat') ? ' · Chat replies unavailable (missing user:write:chat)'
+      : !this.session.state.twitchCanSendChat ? ' · Chat replies rejected by Twitch' : '';
+    this.session.state.twitchDetail = detail + (status === 'connected' ? replies : '');
+  }
+
+  private queueReply(text: string) {
+    if (this.stopped || !this.chatReady || !this.session.state.twitchCanSendChat) return;
+    // Keep score/prompt/result in order and never resend on EventSub reconnect.
+    this.replyQueue = this.replyQueue.then(async () => {
+      if (this.stopped || !this.chatReady || !this.session.state.twitchCanSendChat) return;
+      const response = await fetch('https://api.twitch.tv/helix/chat/messages', {
+        method: 'POST',
+        headers: { 'Client-Id': this.config.clientId, Authorization: `Bearer ${this.config.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broadcaster_id: this.broadcaster, sender_id: this.broadcaster, message: text.slice(0, 500) }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          this.session.state.twitchCanSendChat = false;
+          this.session.state.twitchDetail = 'Chat connected · Twitch rejected chat replies; check chat-write permission';
+        }
+        throw new Error('Chat reply rejected');
+      }
+      const body = await response.json() as { data?: { is_sent?: boolean }[] };
+      if (!body.data?.[0]?.is_sent) throw new Error('Chat reply dropped');
+    }).catch(() => {
+      // Never expose authorization headers, tokens, or upstream error bodies.
+      if (!this.stopped) this.session.log('Release Check', 'A Twitch chat reply could not be sent. Scores and votes remain available in the control room and overlay.');
+    });
   }
 
   private connect(url: string, migrating: boolean) {
@@ -102,7 +135,7 @@ export class TwitchBridge {
         const name = event.chatter_user_name ?? 'viewer';
         this.session.log(name, text, 'chat');
         const error = this.session.command(name, event.chatter_user_id ?? name, text, false);
-        if (error) this.session.log('Release Check', error);
+        if (error) this.session.announce(error);
       }
       if (metadata.subscription_type === 'channel.channel_points_custom_reward_redemption.add') {
         const matches = this.config.rewardId ? event.reward?.id === this.config.rewardId : event.reward?.title === this.config.rewardTitle;
@@ -167,6 +200,7 @@ export class TwitchBridge {
 
   stop() {
     this.stopped = true;
+    this.unsubscribeAnnouncements?.(); this.unsubscribeAnnouncements = undefined;
     if (this.watchdog) clearTimeout(this.watchdog);
     if (this.retry) clearTimeout(this.retry);
     if (this.revalidate) clearInterval(this.revalidate);

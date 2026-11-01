@@ -73,6 +73,7 @@ export interface SessionState {
   mode: 'demo' | 'twitch';
   twitchStatus: 'demo' | 'connecting' | 'connected' | 'error';
   twitchDetail: string;
+  twitchCanSendChat: boolean;
   audioActive: boolean;
   audioSource: string;
   audioDetails: AudioDetails;

@@ -29,12 +29,14 @@ export class ReleaseSession {
   private lastMeterAt = 0;
   private demoVoteIndex = 0;
   private demoVoteAt = 0;
+  private announcements = new Set<(text: string) => void>();
   private readonly demoVoters = ['kickpilot', 'sinewave', 'melo_d', 'subculture', 'luna.wav', 'tapehead', 'lowendleo', 'echoes'];
 
   constructor(private now = () => Date.now(), mode: 'demo' | 'twitch' = 'demo', private checkMs = 30000, private voteMs = 20000) {
     this.state = {
       mode, twitchStatus: mode === 'demo' ? 'demo' : 'connecting',
       twitchDetail: mode === 'demo' ? 'Local demo · no Twitch connection' : 'Connecting to Twitch',
+      twitchCanSendChat: false,
       audioActive: false, audioSource: 'No audio selected', meters: null,
       audioDetails: { kind: 'demo', preset: 'original', paused: false, muted: true },
       phase: 'idle', runId: 'monitor', checkEndsAt: null, voteEndsAt: null, result: null,
@@ -48,13 +50,23 @@ export class ReleaseSession {
     this.state.chat = this.state.chat.slice(-60);
   }
 
+  onAnnouncement(listener: (text: string) => void) {
+    this.announcements.add(listener);
+    return () => { this.announcements.delete(listener); };
+  }
+
+  announce(text: string) {
+    this.log('Release Check', text);
+    for (const listener of this.announcements) listener(text);
+  }
+
   setAudio(active: boolean, source: string, details = this.state.audioDetails) {
     const changed = source !== this.state.audioSource || details.kind !== this.state.audioDetails.kind || details.preset !== this.state.audioDetails.preset;
     const transportChanged = active !== this.state.audioActive || details.paused !== this.state.audioDetails.paused;
     if (changed) {
       if (this.state.phase === 'voting' && this.state.history[0]) {
         this.state.history[0].verdict = 'Audio changed before voting ended';
-        this.log('Release Check', 'Audio changed; the previous vote is closed. Run a fresh check for this version.');
+        this.announce('Audio changed; the previous vote is closed. Run a fresh check for this version.');
       }
       this.clearRound();
     } else if (transportChanged && this.state.phase === 'checking') this.cancel('Playback paused. Start a fresh check with a continuous 30-second section.');
@@ -82,7 +94,7 @@ export class ReleaseSession {
     if (normalized === '!fix') {
       if (!this.state.result) return 'Run a check first to get a measured suggestion.';
       this.state.fixVisible = true;
-      this.log('Release Check', this.state.result.fix);
+      this.announce(this.state.result.fix);
       return null;
     }
     if (this.state.phase !== 'voting' || this.now() >= (this.state.voteEndsAt ?? 0)) return 'Voting opens after the 30-second check.';
@@ -98,7 +110,7 @@ export class ReleaseSession {
   reward(name: string) {
     this.log(name, 'Requested a release check', 'reward');
     const error = this.startCheck(name);
-    if (error) this.log('Release Check', error);
+    if (error) this.announce(error);
     return error;
   }
 
@@ -110,7 +122,7 @@ export class ReleaseSession {
     this.state.voteEndsAt = null; this.state.result = null; this.state.fixVisible = false;
     this.state.verdict = null; this.state.votes = { ready: 0, notyet: 0 }; this.voters.clear();
     this.balance = [];
-    this.log('Release Check', `${name} started a 30-second release check. Keep the track playing.`);
+    this.announce(`${name} started a 30-second release check. Keep the track playing.`);
     return null;
   }
 
@@ -129,7 +141,7 @@ export class ReleaseSession {
 
   private cancel(reason: string) {
     this.state.phase = 'idle'; this.state.checkEndsAt = null;
-    this.state.runId = randomUUID(); this.log('Release Check', reason);
+    this.state.runId = randomUUID(); this.announce(reason);
   }
 
   tick() {
@@ -146,7 +158,7 @@ export class ReleaseSession {
       this.state.result = result; this.state.phase = 'voting';
       this.state.checkEndsAt = null; this.state.voteEndsAt = this.now() + this.voteMs;
       this.demoVoteIndex = 0; this.demoVoteAt = this.now() + 1200;
-      this.log('Release Check', `${result.score}/100 · ${result.topIssue}. Vote !ready or !notyet. You have 20 seconds.`);
+      this.announce(`${result.score}/100 · ${result.topIssue}. Vote !ready or !notyet. You have 20 seconds.`);
       this.state.history.unshift({
         score: result.score, topIssue: result.topIssue, time: result.checkedAt, verdict: null,
         source: this.state.audioDetails.kind === 'input' ? 'Live input' : this.state.audioSource,
@@ -166,7 +178,7 @@ export class ReleaseSession {
         this.state.verdict = result.verdict;
         this.state.phase = 'complete'; this.state.voteEndsAt = null;
         this.state.history[0].verdict = this.state.verdict;
-        this.log('Release Check', result.message);
+        this.announce(result.message);
       }
     }
   }

@@ -12,6 +12,7 @@ export class AudioEngine {
   private frequencyData: Float32Array<ArrayBuffer> | null = null;
   private isInput = false;
   private intentionalPause = false;
+  private measurementId = 'monitor';
   monitoring = false;
   preset: MasterPreset = 'original';
 
@@ -30,6 +31,8 @@ export class AudioEngine {
     this.context = context;
     await context.audioWorklet.addModule(workletUrl);
     this.worklet = new AudioWorkletNode(context, 'release-meter', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
+    // State can arrive while the source is still decoding or the module loads.
+    this.reset(this.measurementId);
     this.analyser = context.createAnalyser();
     this.analyser.fftSize = 4096;
     this.analyser.smoothingTimeConstant = 0.75;
@@ -103,7 +106,10 @@ export class AudioEngine {
     this.worklet?.port.postMessage({ type: 'preset', preset });
   }
 
-  reset(measurementId: string) { this.worklet?.port.postMessage({ type: 'reset', measurementId }); }
+  reset(measurementId: string) {
+    this.measurementId = measurementId;
+    this.worklet?.port.postMessage({ type: 'reset', measurementId });
+  }
   toggleMonitor(): boolean {
     if (!this.monitor || !this.context || this.isInput) return false;
     this.monitoring = !this.monitoring;
@@ -128,7 +134,8 @@ export class AudioEngine {
     this.source?.disconnect(); this.source = null;
     this.media?.getTracks().forEach(t => { t.onended = null; t.stop(); }); this.media = null;
     this.worklet?.disconnect(); this.worklet = null;
-    if (this.context) { this.context.onstatechange = null; await this.context.close(); }
+    const context = this.context;
     this.context = null; this.analyser = null; this.monitor = null; this.monitoring = false;
+    if (context) { context.onstatechange = null; await context.close(); }
   }
 }
