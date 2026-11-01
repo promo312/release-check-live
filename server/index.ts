@@ -34,12 +34,13 @@ sockets.on('connection', (ws, role: string) => {
   send(ws, { type: 'role', controller: ownsAudio }); snapshot(ws);
   let bucket = 0, bucketAt = Date.now();
   ws.on('message', raw => {
-    if (role !== 'controller') return;
     if (Date.now() - bucketAt > 1000) { bucket = 0; bucketAt = Date.now(); }
     if (++bucket > 40) return;
     let message: Record<string, unknown>;
     try { message = JSON.parse(raw.toString()); } catch { return; }
     if (!message || typeof message !== 'object') return;
+    if (message.type === 'get-state') { snapshot(ws); return; }
+    if (role !== 'controller') return;
     if (message.type === 'take-control') {
       if (ws === controller) return;
       if (session.state.audioActive || session.state.audioDetails.paused) {

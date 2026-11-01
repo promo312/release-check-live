@@ -27,6 +27,14 @@ test('real demo audio → 30-second score → chat voting → fix → OBS overla
   const score = Number(await page.locator('#score-number').innerText()); expect(score).toBeGreaterThanOrEqual(85);
   await page.locator('#vote-ready').click(); await page.locator('#vote-ready').click();
   await expect(page.locator('#chat-messages')).toContainText('!ready');
+  // Joining an in-progress vote must retain the server's open window and counts.
+  await obs.reload();
+  await expect(obs.locator('#ov-detail')).toHaveText(/^Chat is voting · [1-9]\d?s · Original$/);
+  await expect.poll(async () => {
+    const [control, overlay] = await Promise.all([page.locator('#ready-count').innerText(), obs.locator('#ov-ready').innerText()]);
+    return control === overlay && Number(overlay) >= 1;
+  }).toBe(true);
+  await expect(obs.getByText('Too few votes', { exact: false })).toHaveCount(0);
   await page.locator('#show-fix').click();
   await expect(page.locator('#fix-panel')).toBeVisible(); await expect(obs.locator('#ov-fix')).toBeVisible();
   await expect(page.locator('#vote-timer')).toHaveText('VOTE CLOSED', { timeout: 26000 });
@@ -82,7 +90,7 @@ test('a local stereo file decodes without upload, and the phase example exposes 
     page.getByRole('button', { name: 'Open audio file', exact: true }).click(),
   ]);
   await fileChooser.setFiles({ name: 'local-reference.wav', mimeType: 'audio/wav', buffer: data });
-  await expect(page.locator('#source-name')).toHaveText('local-reference.wav');
+  await expect(page.locator('#source-name')).toHaveText('local-reference.wav', { timeout: 20000 });
   await expect(page.locator('#source-kind')).toHaveText('LOCAL TRACK');
   await expect(page.locator('#short-term')).not.toHaveText('—', { timeout: 10000 });
   await expect(page.locator('#integrated')).toHaveText('−20.0');

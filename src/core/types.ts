@@ -90,6 +90,7 @@ export interface SessionState {
 }
 
 export type ClientMessage =
+  | { type: 'get-state' }
   | { type: 'take-control' }
   | { type: 'meters'; meters: MeterFrame }
   | { type: 'audio'; active: boolean; source: string; details?: AudioDetails }

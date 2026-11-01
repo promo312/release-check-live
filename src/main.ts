@@ -49,7 +49,11 @@ function syncAudio() {
 
 function connect() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=${isOverlay ? 'overlay' : 'controller'}`);
-  ws.onopen = () => { connected = true; };
+  ws.onopen = () => {
+    // An overlay must synchronize before displaying any cached round verdict.
+    connected = !isOverlay;
+    if (isOverlay) { render(); ws.send(JSON.stringify({ type: 'get-state' } satisfies ClientMessage)); }
+  };
   ws.onmessage = event => {
     let message: ServerMessage;
     try { message = JSON.parse(event.data) as ServerMessage; } catch { return; }
@@ -62,6 +66,7 @@ function connect() {
     }
     if (message.type === 'error') toast(message.message);
     if (message.type === 'state') {
+      connected = true;
       state = message.state; serverOffset = message.now - Date.now();
       if (state.runId !== lastRunId) { lastRunId = state.runId; engine?.reset(state.runId); }
       render();
@@ -142,7 +147,7 @@ function render() {
   hide('show-fix', !state.result); disabled('show-fix', !can);
   hide('fix-panel', !state.result || !state.fixVisible); put('fix-panel', state.result?.fix ?? '');
   put('vote-timer', voting ? `${remaining(state.voteEndsAt)} SEC LEFT` : state.phase === 'complete' ? 'VOTE CLOSED' : 'OPENS AFTER CHECK');
-  put('vote-title', state.verdict ?? (voting ? 'Chat result: voting' : 'Chat result: waiting'));
+  put('vote-title', voting ? 'Chat result: voting' : state.phase === 'complete' ? state.verdict ?? 'Chat result: waiting' : 'Chat result: waiting');
   put('vote-description', voting ? 'Send !ready or !notyet in chat.' : state.phase === 'complete' ? 'Your ears make the final call.' : 'Voting opens after the check.');
   put('ready-count', String(state.votes.ready)); put('notyet-count', String(state.votes.notyet));
   const total = state.votes.ready + state.votes.notyet;
@@ -209,14 +214,16 @@ function renderOverlay() {
   let progress = 0;
   put('ov-score-unit', state.phase === 'checking' ? 'SEC LEFT' : '/ 100');
   if (!connected) {
-    put('ov-score', '—'); put('ov-label', 'Connection lost'); put('ov-title', 'Reconnecting to the control room'); put('ov-detail', 'Keep the local server and control room open.');
+    const syncing = ws?.readyState === WebSocket.OPEN;
+    put('ov-score', '—'); put('ov-label', syncing ? 'Syncing session' : 'Connection lost'); put('ov-title', syncing ? 'Syncing with the control room' : 'Reconnecting to the control room'); put('ov-detail', 'Keep the local server and control room open.');
   } else if (state.phase === 'checking') {
     const left = remaining(state.checkEndsAt); progress = (30 - left) / 30;
     put('ov-score', String(left)); put('ov-label', '30-second release check'); put('ov-title', 'Listening…'); put('ov-detail', 'Loudness · Headroom · Stereo balance');
   } else if (state.result) {
     put('ov-score', String(state.result.score)); put('ov-label', state.result.label);
     put('ov-title', state.result.topIssue);
-    put('ov-detail', `${state.verdict ?? `Chat is voting · ${remaining(state.voteEndsAt)}s`} · ${state.audioDetails.preset === 'hot' ? 'Hot master +6 dB' : 'Original'}`);
+    const voteStatus = state.phase === 'voting' ? `Chat is voting · ${remaining(state.voteEndsAt)}s` : state.phase === 'complete' ? state.verdict ?? 'Vote closed' : 'Chat vote pending';
+    put('ov-detail', `${voteStatus} · ${state.audioDetails.preset === 'hot' ? 'Hot master +6 dB' : 'Original'}`);
     progress = state.result.score / 100;
   } else {
     put('ov-score', '—'); put('ov-label', 'Release check'); put('ov-title', 'Chat: !check'); put('ov-detail', state.audioActive ? 'A 30-second check. Then chat votes.' : 'Press Play in the control room.');
